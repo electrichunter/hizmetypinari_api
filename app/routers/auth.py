@@ -15,7 +15,12 @@ from ..schemas.user_schema import UserCreate, UserResponse, UserLogin, Token
 pwd_context = CryptContext(schemes=["argon2"], deprecated="auto")
 
 # FastAPI için bir yönlendirici (router) oluşturulur.
-auth_router = APIRouter()
+# auth_router = APIRouter() # <- BU SATIR DÜZELTİLDİ
+auth_router = APIRouter(
+    prefix="/api/v1/auth",
+    tags=["Authentication"]
+)
+
 
 # Ortam değişkenlerinden SECRET_KEY, ALGORITHM ve ACCESS_TOKEN_EXPIRE_MINUTES alınır.
 SECRET_KEY = "sizin-cok-gizli-anahtariniz"

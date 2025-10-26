@@ -41,7 +41,8 @@ class JobBase(BaseModel):
 
 class JobCreate(JobBase):
     """Yeni bir ilan oluşturmak için API'ye gönderilecek veri modeli."""
-    pass
+    # DEĞİŞİKLİK: Admin/Provider'ın müşteri ID'si gönderebilmesi için bu alan eklendi.
+    customer_id: Optional[int] = Field(None, description="Admin/Provider tarafından ilan oluşturuluyorsa, müşterinin ID'si")
 
 class JobResponse(JobBase):
     """API'den tek bir ilan detayı dönerken kullanılacak şema."""
@@ -64,3 +65,4 @@ class JobListResponse(BaseModel):
 
     class Config:
         from_attributes = True
+

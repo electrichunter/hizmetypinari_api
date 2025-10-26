@@ -45,6 +45,22 @@ class Service(Base):
     # Hizmet ile ilanlar arasındaki ilişki (bir hizmet -> çok ilan)
     jobs = relationship("Job", back_populates="service")
 
+# 'providers' tablosu için SQLAlchemy modeli (YENİ EKLENDİ)
+# Bu model, 'provider' rolüne sahip kullanıcıların ek profil bilgilerini tutar.
+class Provider(Base):
+    __tablename__ = 'providers'
+    id = Column(Integer, primary_key=True)
+    user_id = Column(Integer, ForeignKey('users.id'), nullable=False, unique=True)
+    business_name = Column(String(255), nullable=True)
+    is_verified = Column(Boolean, default=False)
+    
+    # Provider ile User arasındaki (bire-bir) ilişki
+    user = relationship("User", back_populates="provider_profile")
+    # Provider ile Teklifler arasındaki (bire-çok) ilişki
+    offers = relationship("Offer", back_populates="provider")
+    # Provider ile Değerlendirmeler arasındaki (bire-çok) ilişki
+    reviews = relationship("Review", back_populates="provider")
+
 # 'jobs' tablosu için SQLAlchemy modeli
 class Job(Base):
     __tablename__ = 'jobs'
@@ -76,7 +92,7 @@ class Offer(Base):
     __tablename__ = 'offers'
     id = Column(Integer, primary_key=True)
     job_id = Column(Integer, ForeignKey('jobs.id'), nullable=False)
-    provider_id = Column(Integer, ForeignKey('providers.id'), nullable=False) # provider modeli ayrı bir dosyada olacak
+    provider_id = Column(Integer, ForeignKey('providers.id'), nullable=False) # Artık bu model tanımlı
     offer_price = Column(DECIMAL(10, 2), nullable=False)
     message = Column(Text)
     status = Column(Enum(OfferStatus), default=OfferStatus.pending)
@@ -102,5 +118,34 @@ class Review(Base):
     # Değerlendirme ile müşteri arasındaki ilişki
     customer = relationship("User")
     # Değerlendirme ile hizmet sağlayıcı arasındaki ilişki
-    provider = relationship("Provider")
+    provider = relationship("Provider", back_populates="reviews")
+
+
+   
+
+# 'districts' (İlçeler) tablosu için SQLAlchemy modeli
+class District(Base):
+    __tablename__ = 'districts'
+    id = Column(Integer, primary_key=True)
+    name = Column(String(100), nullable=False)
+    city_name = Column(String(100), nullable=False) # Örnek olarak eklendi
+
+    # İlçe ile ilanlar arasındaki ilişki
+    jobs = relationship("Job", back_populates="district")
+
+# 'providers' (Hizmet Sağlayıcı Profili) tablosu için SQLAlchemy modeli
+class Provider(Base):
+    __tablename__ = 'providers'
+    id = Column(Integer, primary_key=True)
+    user_id = Column(Integer, ForeignKey('users.id'), nullable=False, unique=True)
+    business_name = Column(String(255))
+    bio = Column(Text)
+    is_verified = Column(Boolean, default=False)
+
+    # Provider ile User arasındaki (Bire-Bir) ilişki
+    user = relationship("User", back_populates="provider_profile")
+    # Provider'ın verdiği teklifler
+    offers = relationship("Offer", back_populates="provider")
+    # Provider'ın aldığı değerlendirmeler
+    reviews_received = relationship("Review", back_populates="provider")
 

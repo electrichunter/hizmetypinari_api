@@ -35,3 +35,12 @@ class User(Base):
     # 'roles' tablosuyla ilişki kuruyoruz.
     role_id = Column(Integer, ForeignKey("roles.id"), nullable=False)
     role = relationship("Role", back_populates="users")
+      
+    # Müşteri (customer) rolündeki kullanıcının açtığı ilanlar
+    jobs = relationship("Job", back_populates="customer")
+    
+    # Sağlayıcı (provider) rolündeki kullanıcının profil bilgisi
+    provider_profile = relationship("Provider", back_populates="user", uselist=False, cascade="all, delete-orphan")
+
+    # Müşteri (customer) rolündeki kullanıcının verdiği değerlendirmeler
+    reviews_given = relationship("Review", back_populates="customer")

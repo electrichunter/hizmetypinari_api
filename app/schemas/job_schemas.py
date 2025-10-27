@@ -1,67 +1,40 @@
 from pydantic import BaseModel, Field
 from typing import List, Optional
 from datetime import datetime
-
-# --- Basit Şemalar (İlişkili Verileri Göstermek İçin) ---
-
-class UserSimple(BaseModel):
-    """İlan detaylarında gösterilecek basit kullanıcı bilgisi."""
-    id: int
-    first_name: str
-    last_name: str
-
-    class Config:
-        from_attributes = True
-
-class ServiceSimple(BaseModel):
-    """İlan listesinde gösterilecek basit hizmet bilgisi."""
-    id: int
-    name: str
-
-    class Config:
-        from_attributes = True
-
-class DistrictSimple(BaseModel):
-    """İlan listesinde gösterilecek basit ilçe bilgisi."""
-    id: int
-    name: str
-
-    class Config:
-        from_attributes = True
-
-
-# --- Ana İlan Şemaları ---
+from .user_schema import UserSimple
+from .category_schema import Service
+from .district_schema import District
+from .offer_schema import Offer
+from ..models.job_models import JobStatus
 
 class JobBase(BaseModel):
-    """İlan oluşturma için temel alanlar."""
     title: str = Field(..., min_length=10, max_length=255, description="İlanın başlığı")
     description: str = Field(..., min_length=20, description="İşin detaylı açıklaması")
     service_id: int = Field(..., description="İlgili hizmetin ID'si")
     district_id: int = Field(..., description="İşin yapılacağı ilçenin ID'si")
 
 class JobCreate(JobBase):
-    """Yeni bir ilan oluşturmak için API'ye gönderilecek veri modeli."""
-    # DEĞİŞİKLİK: Admin/Provider'ın müşteri ID'si gönderebilmesi için bu alan eklendi.
     customer_id: Optional[int] = Field(None, description="Admin/Provider tarafından ilan oluşturuluyorsa, müşterinin ID'si")
 
-class JobResponse(JobBase):
-    """API'den tek bir ilan detayı dönerken kullanılacak şema."""
-    id: int
-    status: str
-    created_at: datetime
-    customer: UserSimple # Müşteri bilgisini de iç içe gösterir
+class JobUpdate(BaseModel):
+    title: Optional[str] = None
+    description: Optional[str] = None
+    service_id: Optional[int] = None
+    district_id: Optional[int] = None
+    status: Optional[JobStatus] = None
+    is_active: Optional[bool] = None
 
-    class Config:
-        from_attributes = True # SQLAlchemy modelleriyle uyumlu çalışmasını sağlar
-
-class JobListResponse(BaseModel):
-    """API'den ilan listesi dönerken kullanılacak şema."""
+class Job(JobBase):
     id: int
-    title: str
-    status: str
-    service: ServiceSimple
-    district: DistrictSimple
+    customer_id: int
+    status: JobStatus
+    is_active: bool
     created_at: datetime
+    updated_at: Optional[datetime] = None
+    customer: UserSimple
+    service: Service
+    district: District
+    offers: List[Offer] = []
 
     class Config:
         from_attributes = True

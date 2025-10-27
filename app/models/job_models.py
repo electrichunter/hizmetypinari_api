@@ -1,11 +1,15 @@
 import enum
-from sqlalchemy import (Column, Integer, String, Text, Boolean, DateTime, ForeignKey, Enum, DECIMAL, CheckConstraint)
+from sqlalchemy import (Column, Integer, String, Text, Boolean, DateTime, ForeignKey, Enum, DECIMAL)
 from sqlalchemy.orm import relationship
 from sqlalchemy.sql import func
 
-from .base import Base # Modüler yapı için 'base.py' dosyasından import ediyoruz
+from .base import Base
+from .user import User
+from .category_models import Service
+from .district_models import District
+from .provider_models import Provider
 
-# SQL'deki ENUM tiplerini Python'da tanımlıyoruz
+
 class JobStatus(str, enum.Enum):
     open = "open"
     assigned = "assigned"
@@ -18,56 +22,12 @@ class OfferStatus(str, enum.Enum):
     rejected = "rejected"
     withdrawn = "withdrawn"
 
-# 'categories' tablosu için SQLAlchemy modeli
-class Category(Base):
-    __tablename__ = 'categories'
-    id = Column(Integer, primary_key=True)
-    name = Column(String(150), nullable=False, unique=True)
-    slug = Column(String(150), nullable=False, unique=True)
-    description = Column(Text)
-    is_active = Column(Boolean, default=True)
-    
-    # Kategori ile hizmetler arasındaki ilişki (bir kategori -> çok hizmet)
-    services = relationship("Service", back_populates="category")
-
-# 'services' tablosu için SQLAlchemy modeli
-class Service(Base):
-    __tablename__ = 'services'
-    id = Column(Integer, primary_key=True)
-    category_id = Column(Integer, ForeignKey('categories.id'), nullable=False)
-    name = Column(String(150), nullable=False)
-    slug = Column(String(150), nullable=False)
-    description = Column(Text)
-    is_active = Column(Boolean, default=True)
-
-    # Hizmet ile kategori arasındaki ilişki
-    category = relationship("Category", back_populates="services")
-    # Hizmet ile ilanlar arasındaki ilişki (bir hizmet -> çok ilan)
-    jobs = relationship("Job", back_populates="service")
-
-# 'providers' tablosu için SQLAlchemy modeli (YENİ EKLENDİ)
-# Bu model, 'provider' rolüne sahip kullanıcıların ek profil bilgilerini tutar.
-class Provider(Base):
-    __tablename__ = 'providers'
-    id = Column(Integer, primary_key=True)
-    user_id = Column(Integer, ForeignKey('users.id'), nullable=False, unique=True)
-    business_name = Column(String(255), nullable=True)
-    is_verified = Column(Boolean, default=False)
-    
-    # Provider ile User arasındaki (bire-bir) ilişki
-    user = relationship("User", back_populates="provider_profile")
-    # Provider ile Teklifler arasındaki (bire-çok) ilişki
-    offers = relationship("Offer", back_populates="provider")
-    # Provider ile Değerlendirmeler arasındaki (bire-çok) ilişki
-    reviews = relationship("Review", back_populates="provider")
-
-# 'jobs' tablosu için SQLAlchemy modeli
 class Job(Base):
     __tablename__ = 'jobs'
-    id = Column(Integer, primary_key=True) # SQL'deki BIGINT'i karşılar
+    id = Column(Integer, primary_key=True)
     customer_id = Column(Integer, ForeignKey('users.id'), nullable=False)
     service_id = Column(Integer, ForeignKey('services.id'), nullable=False)
-    district_id = Column(Integer, ForeignKey('districts.id'), nullable=False) # district modeli ayrı bir dosyada olacak
+    district_id = Column(Integer, ForeignKey('districts.id'), nullable=False)
     title = Column(String(255), nullable=False)
     description = Column(Text, nullable=False)
     status = Column(Enum(JobStatus), default=JobStatus.open)
@@ -75,77 +35,21 @@ class Job(Base):
     created_at = Column(DateTime(timezone=True), server_default=func.now())
     updated_at = Column(DateTime(timezone=True), onupdate=func.now())
 
-    # İlan ile müşteri (user) arasındaki ilişki
     customer = relationship("User", back_populates="jobs")
-    # İlan ile hizmet arasındaki ilişki
     service = relationship("Service", back_populates="jobs")
-    # İlan ile teklifler arasındaki ilişki (bir ilan -> çok teklif)
     offers = relationship("Offer", back_populates="job", cascade="all, delete-orphan")
-    # İlan ile değerlendirme arasındaki ilişki (bir ilan -> bir değerlendirme)
     review = relationship("Review", back_populates="job", uselist=False, cascade="all, delete-orphan")
-    # İlan ile ilçe arasındaki ilişki
     district = relationship("District", back_populates="jobs")
 
-
-# 'offers' tablosu için SQLAlchemy modeli
 class Offer(Base):
     __tablename__ = 'offers'
     id = Column(Integer, primary_key=True)
     job_id = Column(Integer, ForeignKey('jobs.id'), nullable=False)
-    provider_id = Column(Integer, ForeignKey('providers.id'), nullable=False) # Artık bu model tanımlı
+    provider_id = Column(Integer, ForeignKey('providers.id'), nullable=False)
     offer_price = Column(DECIMAL(10, 2), nullable=False)
     message = Column(Text)
     status = Column(Enum(OfferStatus), default=OfferStatus.pending)
 
-    # Teklif ile ilan arasındaki ilişki
     job = relationship("Job", back_populates="offers")
-    # Teklif ile hizmet sağlayıcı arasındaki ilişki
     provider = relationship("Provider", back_populates="offers")
-
-# 'reviews' tablosu için SQLAlchemy modeli
-class Review(Base):
-    __tablename__ = 'reviews'
-    id = Column(Integer, primary_key=True)
-    job_id = Column(Integer, ForeignKey('jobs.id'), nullable=False, unique=True) # Bir işe sadece bir yorum
-    provider_id = Column(Integer, ForeignKey('providers.id'), nullable=False)
-    customer_id = Column(Integer, ForeignKey('users.id'), nullable=False)
-    rating = Column(Integer, CheckConstraint('rating >= 1 AND rating <= 5'), nullable=False)
-    comment = Column(Text)
-    created_at = Column(DateTime(timezone=True), server_default=func.now())
-
-    # Değerlendirme ile ilan arasındaki ilişki
-    job = relationship("Job", back_populates="review")
-    # Değerlendirme ile müşteri arasındaki ilişki
-    customer = relationship("User")
-    # Değerlendirme ile hizmet sağlayıcı arasındaki ilişki
-    provider = relationship("Provider", back_populates="reviews")
-
-
-   
-
-# 'districts' (İlçeler) tablosu için SQLAlchemy modeli
-class District(Base):
-    __tablename__ = 'districts'
-    id = Column(Integer, primary_key=True)
-    name = Column(String(100), nullable=False)
-    city_name = Column(String(100), nullable=False) # Örnek olarak eklendi
-
-    # İlçe ile ilanlar arasındaki ilişki
-    jobs = relationship("Job", back_populates="district")
-
-# 'providers' (Hizmet Sağlayıcı Profili) tablosu için SQLAlchemy modeli
-class Provider(Base):
-    __tablename__ = 'providers'
-    id = Column(Integer, primary_key=True)
-    user_id = Column(Integer, ForeignKey('users.id'), nullable=False, unique=True)
-    business_name = Column(String(255))
-    bio = Column(Text)
-    is_verified = Column(Boolean, default=False)
-
-    # Provider ile User arasındaki (Bire-Bir) ilişki
-    user = relationship("User", back_populates="provider_profile")
-    # Provider'ın verdiği teklifler
-    offers = relationship("Offer", back_populates="provider")
-    # Provider'ın aldığı değerlendirmeler
-    reviews_received = relationship("Review", back_populates="provider")
 

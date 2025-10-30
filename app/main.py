@@ -10,7 +10,8 @@ import logging
 from .routers.auth import auth_router 
 from .routers.jobs_router import router as jobs_router 
 from .routers.admin_router import admin_router
-from .routers.offers_router import router as offers_router 
+from .routers.offers_router import router as offers_router
+from .routers.reviews_router import router as reviews_router
 
 # Logging ayarını ekleyelim.
 logging.basicConfig(level=logging.INFO)
@@ -52,6 +53,7 @@ app.include_router(auth_router, tags=["Authentication"])
 app.include_router(jobs_router, tags=["Jobs (İlanlar)"]) 
 app.include_router(admin_router, tags=["User Management (Admin)"])
 app.include_router(offers_router, tags=["Offers (Teklifler)"]) 
+app.include_router(reviews_router, tags=["Reviews (Değerlendirmeler)"])
 
 
 # ==============================================================================

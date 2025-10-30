@@ -5,7 +5,7 @@ from sqlalchemy.orm import joinedload
 from typing import List
 
 # Proje içi importlar
-from ..database import get_db
+from ..database import get_db, async_session_maker
 from ..models.user import User
 from ..models.job_models import Job, Offer, Provider, JobStatus
 from ..schemas import offer_schemas
@@ -134,3 +134,116 @@ async def get_offers_for_job(
     offers = result.scalars().all()
     
     return offers
+
+@router.patch("/offers/{offer_id}/accept", response_model=offer_schemas.OfferResponse)
+async def accept_offer(
+    offer_id: int,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    """
+    Müşterinin, kendi ilanına gelen bir teklifi kabul etmesini sağlar.
+    Teklif kabul edildiğinde, ilanın durumu 'assigned' olur ve diğer tüm bekleyen teklifler reddedilir.
+    """
+    # 1. Sadece 'customer' rolündekiler teklif kabul edebilir/reddedebilir
+    if current_user.role.role_name.value != 'customer':
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Yalnızca 'customer' rolündeki kullanıcılar teklifleri yönetebilir."
+        )
+
+    # 2. Teklifi ve ilişkili ilanı bul
+    offer = await db.get(Offer, offer_id, options=[joinedload(Offer.job)])
+    if not offer:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Teklif bulunamadı.")
+    
+    job = offer.job
+    if not job: # Bu durum normalde olmamalı, çünkü offer'ın job_id'si var.
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Teklifin ilişkili olduğu ilan bulunamadı.")
+
+    # 3. Güvenlik Kontrolü: İlan, giriş yapan kullanıcıya mı ait?
+    if job.customer_id != current_user.id:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Yalnızca kendi ilanınızdaki teklifleri yönetebilirsiniz."
+        )
+
+    # 4. Teklifin ve ilanın durumunu kontrol et
+    if offer.status != offer.status.pending:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"Bu teklif '{offer.status.value}' durumunda. Yalnızca 'pending' durumundaki teklifler kabul edilebilir."
+        )
+    
+    if job.status != JobStatus.open:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"Bu ilan '{job.status.value}' durumunda. Yalnızca 'open' durumundaki ilanlara teklif kabul edilebilir."
+        )
+
+    # 5. Teklifi kabul et ve ilanı ata
+    offer.status = offer.status.accepted
+    job.status = JobStatus.assigned
+
+    # 6. Aynı ilana ait diğer tüm bekleyen teklifleri reddet
+    other_pending_offers_query = select(Offer).where(
+        Offer.job_id == job.id,
+        Offer.id != offer_id,
+        Offer.status == offer.status.pending
+    )
+    other_pending_offers_result = await db.execute(other_pending_offers_query)
+    other_pending_offers = other_pending_offers_result.scalars().all()
+
+    for other_offer in other_pending_offers:
+        other_offer.status = offer.status.rejected
+
+    await db.commit()
+    await db.refresh(offer, attribute_names=["provider", "job"])
+    
+    return offer
+
+@router.patch("/offers/{offer_id}/reject", response_model=offer_schemas.OfferResponse)
+async def reject_offer(
+    offer_id: int,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    """
+    Müşterinin, kendi ilanına gelen bir teklifi reddetmesini sağlar.
+    Eğer reddedilen teklif daha önce kabul edilmişse, ilanın durumu 'open' olarak geri döner.
+    """
+    # 1. Sadece 'customer' rolündekiler teklif kabul edebilir/reddedebilir
+    if current_user.role.role_name.value != 'customer':
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Yalnızca 'customer' rolündeki kullanıcılar teklifleri yönetebilir."
+        )
+
+    # 2. Teklifi ve ilişkili ilanı bul
+    offer = await db.get(Offer, offer_id, options=[joinedload(Offer.job)])
+    if not offer:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Teklif bulunamadı.")
+    
+    job = offer.job
+    if not job:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Teklifin ilişkili olduğu ilan bulunamadı.")
+
+    # 3. Güvenlik Kontrolü: İlan, giriş yapan kullanıcıya mı ait?
+    if job.customer_id != current_user.id:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Yalnızca kendi ilanınızdaki teklifleri yönetebilirsiniz."
+        )
+
+    # 4. Teklifi reddet
+    previous_offer_status = offer.status # Durum değişikliği öncesi kontrol için sakla
+    offer.status = offer.status.rejected
+
+    # 5. Eğer bu teklif daha önce kabul edilmişse, ilanın durumunu 'open' olarak geri çevir
+    if previous_offer_status == offer.status.accepted and job.status == JobStatus.assigned:
+        job.status = JobStatus.open
+
+    await db.commit()
+    await db.refresh(offer, attribute_names=["provider", "job"])
+    
+    return offer

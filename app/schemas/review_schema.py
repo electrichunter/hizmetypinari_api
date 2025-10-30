@@ -10,6 +10,7 @@ class ReviewCreate(ReviewBase):
     job_id: int
     provider_id: int
     customer_id: int
+    job_id: int # job_id'yi request body'den alıyoruz
 
 class Review(ReviewBase):
     id: int

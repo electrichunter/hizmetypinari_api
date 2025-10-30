@@ -144,6 +144,7 @@ async def accept_offer(
     """
     Müşterinin, kendi ilanına gelen bir teklifi kabul etmesini sağlar.
     Teklif kabul edildiğinde, ilanın durumu 'assigned' olur ve diğer tüm bekleyen teklifler reddedilir.
+    Sadece ilanın sahibi (customer) tarafından çağrılabilir.
     """
     # 1. Sadece 'customer' rolündekiler teklif kabul edebilir/reddedebilir
     if current_user.role.role_name.value != 'customer':
@@ -171,6 +172,7 @@ async def accept_offer(
     # 4. Teklifin ve ilanın durumunu kontrol et
     if offer.status != offer.status.pending:
         raise HTTPException(
+        raise HTTPException( # offer.status.pending yerine OfferStatus.pending kullanılmalı
             status_code=status.HTTP_400_BAD_REQUEST,
             detail=f"Bu teklif '{offer.status.value}' durumunda. Yalnızca 'pending' durumundaki teklifler kabul edilebilir."
         )
@@ -183,6 +185,7 @@ async def accept_offer(
 
     # 5. Teklifi kabul et ve ilanı ata
     offer.status = offer.status.accepted
+    offer.status = OfferStatus.accepted # offer.status.accepted yerine OfferStatus.accepted kullanılmalı
     job.status = JobStatus.assigned
 
     # 6. Aynı ilana ait diğer tüm bekleyen teklifleri reddet
@@ -190,6 +193,7 @@ async def accept_offer(
         Offer.job_id == job.id,
         Offer.id != offer_id,
         Offer.status == offer.status.pending
+        Offer.status == OfferStatus.pending # offer.status.pending yerine OfferStatus.pending kullanılmalı
     )
     other_pending_offers_result = await db.execute(other_pending_offers_query)
     other_pending_offers = other_pending_offers_result.scalars().all()
@@ -211,6 +215,7 @@ async def reject_offer(
     """
     Müşterinin, kendi ilanına gelen bir teklifi reddetmesini sağlar.
     Eğer reddedilen teklif daha önce kabul edilmişse, ilanın durumu 'open' olarak geri döner.
+    Sadece ilanın sahibi (customer) tarafından çağrılabilir.
     """
     # 1. Sadece 'customer' rolündekiler teklif kabul edebilir/reddedebilir
     if current_user.role.role_name.value != 'customer':
@@ -238,9 +243,12 @@ async def reject_offer(
     # 4. Teklifi reddet
     previous_offer_status = offer.status # Durum değişikliği öncesi kontrol için sakla
     offer.status = offer.status.rejected
+    previous_offer_status = offer.status # Durum değişikliği öncesi kontrol için sakla (OfferStatus enum değeri)
+    offer.status = OfferStatus.rejected # offer.status.rejected yerine OfferStatus.rejected kullanılmalı
 
     # 5. Eğer bu teklif daha önce kabul edilmişse, ilanın durumunu 'open' olarak geri çevir
     if previous_offer_status == offer.status.accepted and job.status == JobStatus.assigned:
+    if previous_offer_status == OfferStatus.accepted and job.status == JobStatus.assigned: # offer.status.accepted yerine OfferStatus.accepted kullanılmalı
         job.status = JobStatus.open
 
     await db.commit()
